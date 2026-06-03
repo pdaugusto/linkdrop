@@ -1,26 +1,24 @@
 from flask import Flask, redirect, request, render_template, jsonify
-import json, os, random, string
+import requests as req
+import random, string
 from datetime import datetime
 
 app = Flask(__name__)
-ARQUIVO = 'links.json'
 
-# ── Helpers de armazenamento ──────────────────────────────────────────────────
+BIN_ID     = "6a1f8d38da38895dfe7e9a19"
+MASTER_KEY = "$2a$10$2Gc8IOu1qvXQpCKD6Fq7F.qbu7VRu9XlQ4o0faWJYHQDJrhjiCUlm"
+BASE_URL   = f"https://api.jsonbin.io/v3/b/{BIN_ID}"
+HEADERS    = {"X-Master-Key": MASTER_KEY, "Content-Type": "application/json"}
 
 def carregar():
-    if not os.path.exists(ARQUIVO):
-        return {}
-    with open(ARQUIVO, 'r') as f:
-        return json.load(f)
+    r = req.get(BASE_URL + "/latest", headers=HEADERS)
+    return r.json()["record"].get("links", {})
 
 def salvar(links):
-    with open(ARQUIVO, 'w') as f:
-        json.dump(links, f, indent=2, ensure_ascii=False)
+    req.put(BASE_URL, json={"links": links}, headers=HEADERS)
 
 def gerar_codigo():
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
-
-# ── Rotas ─────────────────────────────────────────────────────────────────────
 
 @app.route('/')
 def index():
@@ -36,12 +34,12 @@ def encurtar():
     if not url:
         return jsonify({'erro': 'URL obrigatória'}), 400
     if codigo in links:
-        return jsonify({'erro': 'Código já existe, escolha outro'}), 400
+        return jsonify({'erro': 'Código já existe'}), 400
 
     links[codigo] = {
-        'url'       : url,
-        'cliques'   : 0,
-        'criado_em' : datetime.now().strftime('%d/%m/%Y %H:%M')
+        'url'      : url,
+        'cliques'  : 0,
+        'criado_em': datetime.now().strftime('%d/%m/%Y %H:%M')
     }
     salvar(links)
 
@@ -52,7 +50,7 @@ def encurtar():
 def redirecionar(codigo):
     links = carregar()
     if codigo not in links:
-        return 'Link não encontrado 😕', 404
+        return 'Link não encontrado', 404
     links[codigo]['cliques'] += 1
     salvar(links)
     return redirect(links[codigo]['url'])
